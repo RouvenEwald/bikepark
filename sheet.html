@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Animations-Kontaktbogen</title>
+<link rel="stylesheet" href="../styles.css">
+<style>
+ body{padding:12px;font-size:13px} .card{margin:0 0 14px} .card h2{font-size:18px;margin:0 0 4px}
+ .row{display:grid;grid-template-columns:30px repeat(var(--n,4),1fr);gap:4px;align-items:center;margin-bottom:4px}
+ .row svg{width:100%;height:auto;background:var(--sky);border:1px solid var(--line);display:block}
+ .row b{font-family:var(--display)} .st{font-size:11px;color:var(--muted)}
+ svg text{font-family:var(--display);font-stretch:condensed;font-weight:700}
+</style></head>
+<body><div id="out"></div>
+<script type="module">
+import { createScene, PLAY } from "../anim/engine.js";
+import { SCENES } from "../anim/scenes.js";
+const params = new URLSearchParams(location.search);
+const only = params.get("m"), onlyCard = params.get("c");
+const content = await (await fetch("../content.json")).json();
+const out = document.getElementById("out");
+const stats = {};
+const ps = params.get("ps") ? params.get("ps").split(",").map(Number) : [.2, .45, .7, .95];
+for (const mod of content.modules) {
+  if (only && mod.id !== only) continue;
+  for (const card of mod.cards) {
+    if (onlyCard && !onlyCard.split(",").includes(card.id)) continue;
+    const def = SCENES[card.anim.scene];
+    const wrap = document.createElement("div"); wrap.className = "card"; wrap.id = card.id;
+    wrap.innerHTML = `<h2>${card.num} ${card.title} · ${card.anim.scene} (${def ? def.kind : "FEHLT"})</h2>`;
+    out.appendChild(wrap);
+    if (!def) continue;
+    for (const mode of ["F", "R"]) {
+      const row = document.createElement("div"); row.className = "row"; row.style.setProperty("--n", ps.length); row.innerHTML = `<b>${mode}</b>`; wrap.appendChild(row);
+      for (const p of ps) {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); row.appendChild(svg);
+        const sc = createScene(svg, def); sc.reset(mode);
+        const n = Math.round(PLAY * 60 * p); let air = 0, maxY = 0;
+        for (let i = 0; i <= n; i++) { sc.frame(1 / 60, mode, i / (PLAY * 60)); const s = sc.state?.(); if (s?.air) air++; }
+        const s = sc.state?.();
+        if (s && p === ps[ps.length - 1]) stats[card.id + mode] = { airFrames: air, land: s.land ? Math.round(s.land.rel) : null, x: Math.round(s.x), v: Math.round(s.v) };
+      }
+    }
+  }
+}
+window.__stats = stats; window.__done = true;
+</script></body></html>
