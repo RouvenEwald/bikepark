@@ -1,7 +1,7 @@
 /* Bikepark Lernkarten – Service Worker.
    Cache-first für App-Shell und Inhalte. Bei jeder Änderung an Dateien oder content.json VERSION erhöhen.
    Neue Versionen warten, bis in der App „Jetzt aktualisieren“ getippt wird (kein stiller Austausch). */
-const VERSION = "2026-11-03.1";
+const VERSION = "2026-11-03.2";
 const CACHE = "bikepark-" + VERSION;
 const ASSETS = [
   "./",
@@ -9,13 +9,13 @@ const ASSETS = [
   "./styles.css",
   "./app.js",
   "./db.js",
-  "./anim/engine.js",
-  "./anim/scenes.js",
+  "./engine.js",
+  "./scenes.js",
   "./content.json",
   "./manifest.json",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/maskable-512.png",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./maskable-512.png",
 ];
 
 self.addEventListener("install", event => {

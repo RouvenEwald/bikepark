@@ -2,8 +2,8 @@
    Bildschirme: Einrichtung, Übersicht, Modul, Karte (Anschauen → Im Stand → Fahren → Wie war's?),
    Tagesplan, Einstellungen, Erwachsenen-Bereich. Inhalte kommen ausschließlich aus content.json. */
 import * as DB from "./db.js";
-import { mountAnimation } from "./anim/engine.js";
-import { SCENES } from "./anim/scenes.js";
+import { mountAnimation } from "./engine.js";
+import { SCENES } from "./scenes.js";
 
 export const APP_VERSION = "1.0.0";
 const S = { content: null, doc: null, cards: {}, mods: {}, anim: null, timers: [], view: {}, setupStep: 0, parentUntil: 0, updating: false };
