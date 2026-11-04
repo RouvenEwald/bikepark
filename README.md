@@ -1,6 +1,6 @@
 # Bikepark Lernkarten
 
-Lern-App für den Bikepark als Progressive Web App (PWA). 10 Module, 44 Karten, jede Karte mit einem Merksatz für genau eine Runde und einer Animation („✗ So nicht“, dann 2× „✓ So geht's“). Gedacht für Kinder (auch mit AuDHS) zusammen mit einem Erwachsenen.
+Lern-App für den Bikepark als Progressive Web App (PWA). 10 Module, 44 Karten, Rucksack mit Belohnungen, jede Karte mit einem Merksatz für genau eine Runde und einer Animation („✗ So nicht“, dann 2× „✓ So geht's“). Gedacht für Kinder (auch mit AuDHS) zusammen mit einem Erwachsenen.
 
 - Vanilla HTML/CSS/JavaScript, kein Build-Schritt, keine Frameworks
 - keine externen Ressourcen: keine CDNs, keine Webfonts, keine Analytics
@@ -14,20 +14,24 @@ index.html          App-Hülle
 styles.css          Aussehen (Hell/Dunkel, nur Systemschriften)
 app.js              Bildschirme und Abläufe
 db.js               Fortschritt: IndexedDB, Schema-Version, Migration, Import-Prüfung, PIN-Hash
-anim/engine.js      Animations-Engine (Seite, Draufsicht, Front, Schaubild) und Kinder-Player
-anim/scenes.js      Die 44 Animationen
+engine.js           Animations-Engine (Seite, Draufsicht, Front, Schaubild) und Kinder-Player
+scenes.js           Die 44 Animationen
 content.json        Alle Inhalte (Module, Karten, Tagesplan, Checklisten)
 sw.js               Service Worker (Offline, Update-Hinweis)
 manifest.json       Installation auf dem Startbildschirm
-icons/              App-Icons
-tests/e2e.js        Automatischer Test (optional, braucht Node + Playwright)
-tests/sheet.html    Kontaktbogen aller Animationen (zum Prüfen im Browser)
+icon-192.png, icon-512.png, maskable-512.png   App-Icons
+tests/              Nur zum Testen, gehört NICHT auf GitHub Pages
+```
+
+Alle App-Dateien liegen flach in einem Ordner. Beim Hochladen gehen deshalb keine Unterordner verloren.
+
+```
 ```
 
 ## 1. Auf GitHub Pages veröffentlichen
 
 1. Auf github.com ein neues Repository anlegen, z. B. `bikepark`. Öffentlich oder privat (privat braucht ein kostenpflichtiges Konto für Pages).
-2. Alle Dateien aus diesem Ordner hochladen: „Add file“ → „Upload files“ → alles hineinziehen (auch die Ordner `anim`, `icons`, `tests` und die Datei `.nojekyll`) → „Commit changes“.
+2. Die 13 App-Dateien hochladen (alles außer dem Ordner `tests`): „Add file“ → „Upload files“ → Dateien auswählen → „Commit changes“.
 3. Im Repository: **Settings → Pages**. Bei „Build and deployment“ als Quelle „Deploy from a branch“ wählen, Branch `main`, Ordner `/ (root)`, speichern.
 4. Nach 1–2 Minuten ist die App erreichbar unter
    `https://<dein-github-name>.github.io/bikepark/`
@@ -69,25 +73,29 @@ Tipp: Nach jedem Parktag einmal exportieren.
 ## 5. Wie die App funktioniert
 
 - **Karte:** 1 Anschauen (Animation mit Start-Knopf) → 2 Im Stand üben (falls vorhanden) → 3 Fahren (eine Runde, ein Merksatz) → 4 Wie war's? (Noch üben / Fast / Kann ich)
-- **Stern:** „Kann ich“ 2-mal hintereinander. Auslassen gibt auch einen Stern, denn eine Stelle bewusst auszulassen ist eine gute Entscheidung. Dazu kommen Sterne für Pausen und für einen abgeschlossenen Tag.
+- **Karte sitzt:** wenn das Kind 2-mal hintereinander „Kann ich“ wählt. Dafür braucht es keine PIN. Im aktiven Modul wählt das Kind selbst, welche Karte es übt.
 - **Mix-Runde:** jede 4. Runde, ohne neuen Merksatz.
-- **Modul bestanden:** Sind alle Karten erledigt, prüft ein Erwachsener auf der Strecke und gibt das Modul per PIN frei. Dafür gibt es ein Abzeichen.
-- **Rot und Schwarz** (Module 8–10) brauchen zusätzlich eine Freischaltung per PIN.
+- **Module:** strikt der Reihe nach, 1 → 10. Ein Modul ist fertig, wenn alle Karten sitzen. Dann bestätigt ein Erwachsener mit der PIN („Modul abschließen“). Dafür gibt es ein Abzeichen, und das nächste Modul geht auf.
+- **Zurückstellen:** kann nur ein Erwachsener, im selben Schritt wie die Modul-Prüfung. Karten, die noch nicht sitzen oder im Park nicht passen, werden als „Zurückgestellt“ markiert. Sie zählen für den Abschluss und können später weiter geübt werden.
+- **Rucksack:** Nach 1 bis 3 gefahrenen Runden (zufällig, Mix-Runden zählen mit) gibt es Pommes, Limo, Kuchen oder ein Energy-Gel. Seltener: Pommes, häufiger: Energy-Gel. Nie 3-mal hintereinander dasselbe. Beim Abholen bestätigt ein Erwachsener mit der PIN. Danach gilt die Sache als „eingelöst“. Nach einer richtigen PIN kann man 2 Minuten lang ohne neue PIN weitere Sachen abholen.
+- **Abzeichen:** je eines pro bestandenem Modul, dazu Abzeichen für den 1., 3., 5., 10. und 20. Parktag. Ein Parktag ist jeder Tag mit mindestens einer gefahrenen Runde.
+- **Pause:** gibt keine Belohnung. Die App sagt: „Gute Entscheidung. Pausen gehören dazu.“
 - **PIN:** Sie wird nur als SHA-256-Hash mit Salt gespeichert. Nach 5 Fehlversuchen ist die Eingabe 60 Sekunden gesperrt. Die PIN lässt sich nur mit der alten PIN ändern. Hinweis: Das ist eine Hürde für Kinder, kein Schutz gegen jemanden mit Entwickler-Werkzeugen.
 - **Tagesplan:** feste Blöcke mit Bike-Check, Schutz, Aufwärmen, 3 Lernkarten, Pause mit Timer, freie Runden und Abschluss. Die Stopp-Signale stehen immer oben.
+- **Ältere Daten:** Beim ersten Start nach dem Update werden die Daten automatisch umgestellt. Sterne fallen weg, früher ausgelassene Karten sind wieder offen, bestandene Module bleiben bestanden.
 
 ## 6. Inhalte ändern
 
 Alle Texte stehen in `content.json`. Neue Karten oder geänderte Texte brauchen keine Code-Änderung.
 
-- **Neue Karte:** Eintrag mit eigener, neuer `id` anlegen. Bei `anim.scene` eine vorhandene Animation aus `anim/scenes.js` angeben. Eine ganz neue Animation ist Code und gehört in `anim/scenes.js`.
+- **Neue Karte:** Eintrag mit eigener, neuer `id` anlegen. Bei `anim.scene` eine vorhandene Animation aus `scenes.js` angeben. Eine ganz neue Animation ist Code und gehört in `scenes.js`.
 - **Karte umbenennen (ID ändern):** die alte ID unter `"aliases": ["alte-id"]` eintragen, dann bleibt der Fortschritt erhalten. Für Module gilt dasselbe.
 - **Karte löschen:** Der Fortschritt dazu wird archiviert und kommt zurück, wenn die ID wieder auftaucht.
 - **Danach immer** in `sw.js` die Zeile `const VERSION = "…"` hochzählen. Sonst bekommen installierte Apps die Änderung nicht. Auf dem Handy erscheint dann „Update verfügbar“.
 
 ## 7. Für später vorbereitet: Freigabe per Code
 
-Jedes Modul speichert, wie es freigegeben wurde (`passedBy` / `unlockedBy`: `"pin"`). Der Fortschritt hat ein Feld `remote` (`enabled`, `keyId`). Eine spätere Fern-Freigabe per Code (z. B. HMAC über die Modul-ID) kann dort andocken und `passedBy: "code"` setzen, ohne dass sich das Datenmodell ändert. Sie ist nicht eingebaut.
+Jedes Modul speichert, wie es abgeschlossen wurde (`passedBy`: `"pin"`). Der Fortschritt hat ein Feld `remote` (`enabled`, `keyId`). Eine spätere Fern-Freigabe per Code (z. B. HMAC über die Modul-ID) kann dort andocken und `passedBy: "code"` setzen, ohne dass sich das Datenmodell ändert. Sie ist nicht eingebaut.
 
 ## 8. Testen (optional)
 
@@ -96,4 +104,4 @@ python3 -m http.server 8765          # im App-Ordner
 node tests/e2e.js                    # braucht: npm install playwright
 ```
 
-Der Test prüft Erststart, Kartenablauf, Mix-Runde, Offline-Start, App-Update, PIN-Sperre, Export und Notfallweg, kaputten Import, Inhaltsänderung mit umbenannten und gelöschten IDs sowie alle 44 Animationen. Unter `http://localhost:8765/tests/sheet.html` zeigt ein Kontaktbogen alle Animationen auf einen Blick.
+Der Test prüft Erststart, Kartenablauf, Mix-Runde, Rucksack und Einlösen, Tages-Abzeichen, Modul-Abschluss mit Zurückstellen, Pause, Offline-Start, App-Update, PIN-Sperre, Export und Notfallweg, kaputten Import, Migration alter Daten, Inhaltsänderung mit umbenannten und gelöschten IDs sowie alle 44 Animationen. Unter `http://localhost:8765/tests/sheet.html` zeigt ein Kontaktbogen alle Animationen auf einen Blick.

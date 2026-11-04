@@ -3,10 +3,9 @@
    Schema-Version + Migrationen, Validierung für Import, PIN-Hash (SHA-256 mit Salt). */
 
 export const APP_ID = "bikepark-lernkarten";
-export const SCHEMA = 1;
+export const SCHEMA = 2;
 const DB_NAME = "bikepark-lernkarten", STORE = "kv", KEY = "progress";
 const RATINGS = [null, "r", "y", "g"];
-const STAR_TYPES = ["card", "skip", "pause", "day"];
 
 export const nowIso = () => new Date().toISOString();
 export function today(d = new Date()) {
@@ -23,16 +22,20 @@ export function emptyProgress() {
     pin: null,                         // { algo, salt, hash, setAt }
     lock: { fails: 0, until: 0 },      // Sperre nach 5 Fehlversuchen
     settings: { theme: "light", slow: false },
-    cards: {},                         // Karten-ID → { runs, rating, streak, mastered, masteredAt, skipped, skippedAt, history[] }
-    modules: {},                       // Modul-ID → { status: "passed", passedAt, passedBy, unlockedAt, unlockedBy }
-    stars: [],                         // { at, type, ref }
+    cards: {},                         // Karten-ID → { runs, rating, streak, mastered, masteredAt, deferred, deferredAt, history[] }
+    modules: {},                       // Modul-ID → { status: "passed", passedAt, passedBy }
+    rewards: emptyRewards(),           // Rucksack: { runs, nextAt, items: [{ id, item, at, redeemedAt }] }
+    parkDays: [],                      // Tage mit mindestens einer Runde ("JJJJ-MM-TT"), für Tages-Abzeichen
     days: {},                          // "JJJJ-MM-TT" → Tageszustand
     orphans: { cards: {}, modules: {} }, // Fortschritt zu IDs, die es im Inhalt (noch) nicht gibt
     remote: { enabled: false, keyId: null }, // vorbereitet für spätere Freigabe per Code (HMAC je Modul-ID)
   };
 }
-export function emptyCard() { return { runs: 0, rating: null, streak: 0, mastered: false, masteredAt: null, skipped: false, skippedAt: null, history: [] }; }
-export function emptyDay() { return { runs: 0, sinceMix: 0, plan: {}, checks: {}, pauseStartedAt: null, pauseStars: 0, dayStar: false }; }
+export function emptyCard() { return { runs: 0, rating: null, streak: 0, mastered: false, masteredAt: null, deferred: false, deferredAt: null, history: [] }; }
+export function emptyDay() { return { runs: 0, sinceMix: 0, plan: {}, checks: {}, pauseStartedAt: null }; }
+export function emptyRewards() { return { runs: 0, nextAt: 1 + rand(3), items: [] }; }
+// Zufallszahl 0 … n-1 (kryptografisch, ohne Verzerrung durch Math.random)
+export function rand(n) { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; }
 
 /* ---------- IndexedDB ---------- */
 let dbp = null;
@@ -69,8 +72,22 @@ export async function save(doc) {
 }
 
 /* ---------- Migration ---------- */
-// Für Version n → n+1 hier eine Funktion ergänzen, z. B. 1: d => { d.neuesFeld = …; return d; }
-const MIGRATIONS = {};
+// Für Version n → n+1 hier eine Funktion ergänzen.
+const MIGRATIONS = {
+  // 1 → 2: Sterne werden durch den Rucksack ersetzt, „Auslassen“ entfällt (ausgelassene Karten wieder offen),
+  // Extra-Freischaltung für Rot/Schwarz entfällt, Parktage werden gezählt.
+  1: d => {
+    const fixCard = c => { delete c.skipped; delete c.skippedAt; c.deferred = false; c.deferredAt = null; };
+    Object.values(d.cards || {}).forEach(fixCard);
+    Object.values(d.orphans?.cards || {}).forEach(fixCard);
+    delete d.stars;
+    for (const [id, m] of Object.entries(d.modules || {})) { delete m.unlockedAt; delete m.unlockedBy; if (m.status !== "passed") delete d.modules[id]; }
+    for (const v of Object.values(d.days || {})) { delete v.pauseStars; delete v.dayStar; }
+    d.rewards = emptyRewards();
+    d.parkDays = Object.entries(d.days || {}).filter(([, v]) => v.runs > 0).map(([k]) => k).sort();
+    return d;
+  },
+};
 export function migrate(input) {
   if (!input || typeof input !== "object") throw new Error("Kein gültiger Fortschritt.");
   let d = structuredClone(input);
@@ -91,6 +108,7 @@ function normalize(d) {
   d.lock = { ...base.lock, ...(d.lock || {}) };
   d.orphans = { cards: {}, modules: {}, ...(d.orphans || {}) };
   d.remote = { ...base.remote, ...(d.remote || {}) };
+  d.rewards = { ...base.rewards, ...(d.rewards || {}) };
   for (const id of Object.keys(d.cards || {})) d.cards[id] = { ...emptyCard(), ...d.cards[id] };
   for (const id of Object.keys(d.days || {})) d.days[id] = { ...emptyDay(), ...d.days[id] };
   return d;
@@ -111,7 +129,7 @@ export function validate(d) {
     if (!isInt(c.runs)) fail(`Runden bei ${id} ungültig`);
     if (!RATINGS.includes(c.rating)) fail(`Bewertung bei ${id} ungültig`);
     if (!isInt(c.streak)) fail(`Serie bei ${id} ungültig`);
-    if (typeof c.mastered !== "boolean" || typeof c.skipped !== "boolean") fail(`Status bei ${id} ungültig`);
+    if (typeof c.mastered !== "boolean" || typeof c.deferred !== "boolean") fail(`Status bei ${id} ungültig`);
     if (!Array.isArray(c.history)) fail(`Verlauf bei ${id} ungültig`);
   }
   if (!isObj(d.modules)) fail("Module fehlen");
@@ -119,8 +137,10 @@ export function validate(d) {
     if (!isObj(m)) fail(`Modul ${id} ungültig`);
     if (m.status !== undefined && m.status !== null && m.status !== "passed") fail(`Status von ${id} ungültig`);
   }
-  if (!Array.isArray(d.stars)) fail("Sterne fehlen");
-  for (const s of d.stars) if (!isObj(s) || typeof s.at !== "string" || !STAR_TYPES.includes(s.type)) fail("Stern ungültig");
+  const R = d.rewards;
+  if (!isObj(R) || !isInt(R.runs) || !Number.isInteger(R.nextAt) || R.nextAt < 1 || R.nextAt > 3 || !Array.isArray(R.items)) fail("Rucksack ungültig");
+  for (const it of R.items) if (!isObj(it) || typeof it.id !== "string" || typeof it.item !== "string" || typeof it.at !== "string" || !(it.redeemedAt === null || typeof it.redeemedAt === "string")) fail("Sache im Rucksack ungültig");
+  if (!Array.isArray(d.parkDays) || d.parkDays.some(k => !/^\d{4}-\d{2}-\d{2}$/.test(k))) fail("Parktage ungültig");
   if (!isObj(d.days)) fail("Tage fehlen");
   for (const [k, v] of Object.entries(d.days)) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !isObj(v)) fail("Tag ungültig");
@@ -179,7 +199,7 @@ export function parseImport(text, current) {
   return data;
 }
 export function isFresh(d) {
-  return d.stars.length === 0 && Object.values(d.cards).every(c => c.runs === 0 && !c.mastered && !c.skipped) && Object.keys(d.modules).length === 0;
+  return d.rewards.items.length === 0 && d.parkDays.length === 0 && Object.values(d.cards).every(c => c.runs === 0 && !c.mastered && !c.deferred) && Object.keys(d.modules).length === 0;
 }
 
 /* ---------- PIN ---------- */
